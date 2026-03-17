@@ -1,194 +1,172 @@
-"use client";
-import Image from "next/image";
+"use client"
+ 
 import logoimg from "@/assets/task.png";
-import Link from "next/link";
 import FooterSAU from "@/components/FooterSAU";
+import Image from "next/image";
+import Link from "next/link";
 import { useState } from "react";
-import { supabase } from "@/services/supabaseClient";
 import Swal from "sweetalert2";
+import { supabase } from "@/services/supabaseClient";
 import { useRouter } from "next/navigation";
  
 export default function Page() {
-    const router = useRouter();
-  // state
-  const [title, setTitle] = useState<string>("");
-  const [detail, setDetail] = useState<string>("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string>("");
+  const router = useRouter();
+ 
+  //สร้าง state เพื่อจัดการกับข้อมูลใน component
+  const [title, setTitle] = useState<string>('');
+  const [detail, setDetail] = useState<string>('');
+  const [imageFile, setImageFile] = useState<File | null>(null); //เก็บตัวรูปที่เลือก
+  const [imagePreview, setImagePreview] = useState<string | null>(null); //เก็บที่อยู่ของรูปที่จะแสดง
   const [isCompleted, setIsCompleted] = useState<boolean>(false);
  
-  // เลือกรูป
-  const handleSelectImage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-    }
-  };
+  //ฟังก์ชันเลือกรูป และแสดงรูป
+  const handleSelectImage = (e: React.ChangeEvent<HTMLInputElement>)=>{      
+      const file = e.target.files?.[0]; //e.target.files?.[0] คือ รูปที่เลือก
  
-  // บันทึกงาน เพื่อส่งไปยังฐานข้อมูล
-  const handleSaveClick = async() => {
+      if(file){
+        setImageFile(file); //เอารูปกำหนดให้กับ imaageFile
+        setImagePreview(URL.createObjectURL(file)); //เอาตำแหน่งรูปกำหนดให้กับ imagePreview
+      }
+  }
+ 
+  //ฟังก์ชันบันทึกข้อมูลเพื่อส่งรูปไป storage:bucket(task_tb) และบันทึกข้อมูลไปยัง database:table(task_tb)
+  const handleSaveClick = async()=>{
+   
     //Validate UI
-    if (!title.trim()) {
-      Swal.fire({
-        icon: "warning",
-        title: "เกิดข้อผิดพลาด",
-        text: "กรุณากรอกชื่องาน",
-      });
-      return;
-    }
-    if (!detail.trim()) {
-      Swal.fire({
-        icon: "warning",
-        title: "เกิดข้อผิดพลาด",
-        text: "กรุณากรอกรายละเอียดงาน",
-      });
-      return;
-    }
-    if (!imageFile) {
-      Swal.fire({
-        icon: "warning",
-        title: "เกิดข้อผิดพลาด",
-        text: "กรุณาเลือกรูปภาพ",
-      });
-      return;
+    if(title === '' || detail === '' || imageFile === null){
+        Swal.fire({
+            title:'คำเตือน',
+            text:'กรุณาตรวจสอบการป้อนข้อมูล และเลือกรูปภาพ',
+            icon:'warning',
+            confirmButtonText:'ตกลง',            
+        })
+        return;
     }
  
-    // อัพโหลดรูปไปยังที่เก็บไฟล์ (เช่น Supabase Storage) เพื่อให้ได้ URL ของรูปที่อัพโหลด
-    let image_url = "";//ตัวแปรที่อยู่รูป
+    //อัปโหลดรูปไปยัง storage:bucket(task_tb) และ Get image url ของรูปเพื่อไปใช้บันทึกลง database--------
+    let  image_url = ''; //ตัวแปรเก็บที่อยู่รูป
+   
+    const new_file_name = `${Date.now()}_${imageFile.name}`; //เปลี่ยนชื่อรูป
  
-    //เปลี่ยนชื่อรูป
-    const new_file_name = `${Date.now()}_${imageFile.name}`;
+    //อัปโหลด
+    const {error: error1} = await supabase  
+                        .storage
+                        .from('task_bk')
+                        .upload(new_file_name, imageFile);
  
-    //อัพโหลดรูปไปยัง Supabase Storage
-    const {error} = await supabase.storage.from("task_bk").upload(new_file_name, imageFile);
- 
-    //ดึง URL ของรูปที่อัพโหลด
-    const { data } = await supabase.storage.from("task_bk").getPublicUrl(new_file_name);
-    image_url = data.publicUrl; //เก็บ URL ของรูปที่อัพโหลดไว้ในตัวแปร image_url
- 
-    if (error) {
-      Swal.fire({
-        icon: "error",
-        title: "เกิดข้อผิดพลาด",
-        text: "ไม่สามารถอัพโหลดรูปภาพได้",
-      });
-      return;
+    if(error1){
+        Swal.fire({
+            title:'เกิดข้อผิดพลาด', text:'ไม่สามารถอัปโหลดรูปได้ กรุณาลองใหม่อีกครั้ง', icon:'error', confirmButtonText:'ตกลง',            
+        })
+        return;
     }
  
+    //ไปเอา image url ของรูปที่อัปโหลด
+    const { data } = await supabase
+                        .storage
+                        .from('task_bk')
+                        .getPublicUrl(new_file_name);
  
-    //บันทึกข้อมูลงานใหม่ลงฐานข้อมูล โดยส่ง title, detail, image_url, is_completed ไปยัง backend API หรือ Supabase
-    const {error: error2} = await supabase.from("task_tb").insert({
-      title: title,
-      detail: detail,
-      image_url: image_url,
-      is_completed: isCompleted
-    });
+    image_url = data.publicUrl;
  
-    if (error2) {
-      Swal.fire({
-        icon: "error",
-        title: "เกิดข้อผิดพลาด",
-        text: "ไม่สามารถบันทึกข้อมูลงานได้",
-      });
-      return;
+    //บันทึกข้อมูลไปยัง database:table(task_tb)----------------
+    const {error: error2} = await supabase
+                        .from('task_tb')
+                        .insert({
+                            title: title,
+                            detail: detail,
+                            image_url: image_url,
+                            is_completed: isCompleted
+                        })
+   
+    if(error2){
+        Swal.fire({
+            title:'เกิดข้อผิดพลาด', text:'กรุณาลองใหม่อีกครั้ง', icon:'error', confirmButtonText:'ตกลง',            
+        })
+        return;
     }
  
     Swal.fire({
-      icon: "success",
-      title: "สำเร็จ",
-      text: "บันทึกงานใหม่เรียบร้อยแล้ว",
-    })
-    router.push("/showalltask");
-  };
+            title:'ผลการทำงาน', text:'บันทึกข้อมูลเรียบร้อย', icon:'success', confirmButtonText:'ตกลง',          
+        })
+       
+    //แล้วย้อนกลับไปหน้า /showalltask
+    router.push('/showalltask');
+  }
+ 
  
   return (
     <>
-      <div className="w-3/5 mt-10 p-10 shadow-xl mx-auto border border-gray-400 rounded-xl flex flex-col justify-center items-center">
+      <div className="w-3/5 mt-20 p-10 shadow-xl mx-auto mb-10
+                      border border-gray-400 rounded-xl
+                      flex flex-col justify-center items-center">
+        {/* แสดงรูปจาก assets ในโปรเจ็กต์ */}
         <Image src={logoimg} alt="logo" width={100} height={100} />
  
+        {/* แสดงชื่อแอปฯ + การทำงาน */}
         <h1 className="mt-5 text-2xl font-bold text-gray-700">
           Manage Task App
         </h1>
-        <h1 className="mt-3 text-lg text-gray-700">เพิ่มงาน</h1>
+        <h1 className="mt-3 text-lg text-gray-700">
+            เพิ่มงาน
+        </h1>
  
-        {/* input */}
+        {/* ส่วนของการป้อนงาน และรายละเอียดงาน */}
         <div className="w-full flex flex-col mt-5">
-          <h1>ชื่องาน</h1>
-          <input
-            type="text"
-            className="mt-1 p-2 border border-gray-400 rounded mb-2"
-            placeholder="กรุณากรอกชื่องาน"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
- 
-          <h1>รายละเอียดงาน</h1>
-          <textarea
-            className="mt-1 p-2 border border-gray-400 rounded mb-2"
-            placeholder="กรุณากรอกรายละเอียดงาน"
-            rows={4}
-            value={detail}
-            onChange={(e) => setDetail(e.target.value)}
-          />
+            <h1>ชื่องาน</h1>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)}
+                   className="p-2 border border-gray-700 rounded mt-1 mb-2"/>
+            <h1>รายละเอียดงาน</h1>
+            <textarea
+                value={detail} onChange={(e)=>setDetail(e.target.value)}
+                className="p-2 border border-gray-700 rounded mt-1 mb-2"
+                rows={4}>
+            </textarea>
         </div>
  
-        {/* upload */}
-        <div className="w-full mt-5 flex flex-col">
-          <h1>อัพโหลดรูป</h1>
-          <input
-            id="selectImage"
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={handleSelectImage}
-          />
-          <label
-            htmlFor="selectImage"
-            className="px-4 py-2 bg-purple-500 hover:bg-purple-600 text-white rounded mt-1 mb-2 w-40 text-center cursor-pointer"
-          >
-            เลือกรูปภาพ
-          </label>
- 
-          {/* preview */}
-          {imagePreview && (
-            <Image
-              src={imagePreview}
-              alt="preview"
-              width={200}
-              height={200}
-              className="rounded"
-            />
-          )}
+        {/* ส่วนเลือกรูป และแสดงรูป */}
+        <div  className="w-full flex flex-col mt-5">
+            <h1>อัปโหลดรูป</h1>
+            <input id="selectImage" type="file" accept="image/*"  
+                   className="hidden" onChange={handleSelectImage}/>
+            <label htmlFor="selectImage"
+                   className="px-4 py-2 bg-blue-600 text-white
+                              rounded mt-1 mb-2 w-30 text-center">
+                เลือกรูป
+            </label>
+            {/* แสดงรูป */}
+            {
+                //ตรวจสอบว่ามีการเลือกรูปหรือไม่จาก imagePreview
+                imagePreview &&
+                <Image src={imagePreview} alt="preview" width={150} height={150}/>
+            }
         </div>
  
-        {/* status */}
-        <div className="w-full mt-5 flex flex-col">
-          <h1>สถานะงาน</h1>
-          <select
-            className="mt-1 p-2 border border-gray-400 rounded mb-2"
-            value={isCompleted == true ? "1" : "0"}
-            onChange={(e) => setIsCompleted(e.target.value === "1")}
-          >
-            <option value="0">ยังไม่เสร็จ</option>
-            <option value="1">เสร็จแล้ว</option>
-          </select>
+        {/* ส่วนเลือกสถานะงาน */}
+        <div className="w-full flex flex-col mt-5">
+            <h1>สถานะงาน</h1>
+            <select value={isCompleted==true?"1":"0"}
+                    onChange={(e)=>setIsCompleted(e.target.value === "1")}
+                    className="p-2 border border-gray-700 rounded mt-1 mb-2">
+                <option value="1">✅ เสร็จแล้ว</option>
+                <option value="0">❌ ยังไม่เสร็จ</option>
+            </select>
         </div>
  
-        {/* buttons */}
+        {/* ส่วนปุ่มบันทึกงานใหม่ */}
         <button onClick={handleSaveClick}
-        className="w-full bg-green-500 py-2 px-4 rounded text-white hover:bg-green-600 mt-3">
-          บันทึกงานใหม่
+                className="w-full px-4 py-2 bg-green-500 text-white
+                        hover:bg-green-600 rounded mt-5 cursor-pointer">
+            บันทึกงานใหม่
         </button>
  
-        <Link
-          href="/showalltask"
-          className="w-full bg-purple-500 py-2 px-4 rounded text-white hover:bg-purple-600 mt-3 text-center cursor-pointer"
-        >
-          กลับไปหน้าข้อมูลทั้งหมด
+        {/* ส่วนปุ่มกลับไปหน้า /showalltask */}
+        <Link href={'/showalltask'} className="mt-3 text-blue-500" >
+            กลับไปหน้าแสดงงานทั้งหมด
         </Link>
       </div>
  
+      {/* ส่วนของ Footer */}
       <FooterSAU />
     </>
   );

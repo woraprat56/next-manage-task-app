@@ -47,6 +47,36 @@ export default function Page() {
     {/* เรียกใช้ฟังก์ชันดึงข้อมูล */}
     fetchTasks();
   }, []);
+
+  // ฟังก์ชันสำหรับลบข้อมูล
+  const handleDeleteCkick = async (id: string, image_url: string) => {
+    // ยืนยันการลบข้อมูล
+    Swal.fire({
+      title: "คุณแน่ใจหรือไม่?",
+      text: "คุณต้องการลบข้อมูลนี้หรือไม่?",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#3085d6",
+      cancelButtonColor: "#d33",
+      confirmButtonText: "ลบเลย!",
+      cancelButtonText: "ยกเลิก",
+    }).then(async (result) => {
+      if (result.isConfirmed) {
+        // ลบข้อมูลจากฐานข้อมูล
+        const { error : error1 } = await supabase
+                          .storage
+                          .from("task_tb")
+                          .remove([image_url.substring(image_url.lastIndexOf("/") + 1)]) //ลบรูปจาก storage ด้วยการเอาชื่อรูปที่อยู่หลังสุดของ image_url ไปลบ
+  }
+    //ลบรูปจาก storage
+    const { error : error2 } = await supabase
+                          .storage
+                          .from("task_tb")
+                          .remove([image_url]);
+    // อัพเดตข้อมูลใน state tasks หลังจากลบข้อมูล
+    setTasks(tasks.filter((tasks) => tasks.id !== id));
+    })
+  };
   return (
     <>
       <div className="w-3/5 mt-10 p-10 shadow-xl mx-auto border border-gray-400 rounded-xl flex flex-col justify-center items-center">
@@ -89,7 +119,17 @@ export default function Page() {
               <td className="border border-gray-500 p-2">{item.is_completed ? "เสร็จสิ้น" : "ยังไม่เสร็จ"}</td>
               <td className="border border-gray-500 p-2 text-center">{new Date(item.created_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
               <td className="border border-gray-500 p-2 text-center">{new Date(item.updated_at).toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' })}</td>
-              <td className="border border-gray-500 p-2 text-center">แก้ไข | ลบ</td>
+              <td className="border border-gray-500 p-2 text-center">
+                <Link href={`/edittask/${item.id}`} className="curser-poiter text-green-500">
+                  แก้ไข
+                </Link>
+                {'  '}|{'  '}
+                <button className="curser-pointer text-red-500"
+                onClick={()=>handleDeleteCkick(item.id, item.image_url) }>
+                  ลบ
+                </button>
+
+              </td>
             </tr>
             ) )}
           </tbody>
